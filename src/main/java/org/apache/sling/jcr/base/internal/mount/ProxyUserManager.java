@@ -72,50 +72,48 @@ public class ProxyUserManager extends ProxyWrapper<UserManager> implements UserM
         return delegate.findAuthorizables(query);
     }
 
+    // NOTE (ASO cloneless-preview): the create* methods below deliberately do NOT replay the creation
+    // onto the `mount` UserManager. Sling's generic ProxyUserManager assumes the mount is a SEPARATE
+    // repository backend and dual-writes so both stores get the authorizable. Our PreviewRepositoryMount
+    // is NOT a separate backend — its OverlaySession wraps the SAME underlying JCR session as `delegate`
+    // (ProxyRepository passes the real session as PARENT_SESSION). Replaying the create on `mount`
+    // therefore creates the SAME authorizable a second time on the SAME session, which throws
+    // AuthorizableExistsException — surfacing as a false HTTP 409 "Authorizable already exists" for EVERY
+    // user/group creation (the audit log shows the user WAS created by the first call, then the replay
+    // 409s). Authorizables live under /home, outside the mounted /content subtree, so the mount has no
+    // authorizable store of its own to keep in sync. Reads (getAuthorizable/findAuthorizables above) are
+    // already delegate-only, so delegating creates too keeps them consistent. Fixes create-user /
+    // Create-Site-as-author / product-test CreatePageAsAuthorUserIT.
     public User createUser(String userID, String password) throws AuthorizableExistsException, RepositoryException {
-        User user = delegate.createUser(userID, password);
-        mount.createUser(userID, password, user.getPrincipal(), user.getPath());
-        return user;
+        return delegate.createUser(userID, password);
     }
 
     public User createUser(String userID, String password, Principal principal, String intermediatePath)
             throws AuthorizableExistsException, RepositoryException {
-        User user = delegate.createUser(userID, password, principal, intermediatePath);
-        mount.createUser(userID, password, principal, user.getPath());
-        return user;
+        return delegate.createUser(userID, password, principal, intermediatePath);
     }
 
     public User createSystemUser(String userID, String intermediatePath)
             throws AuthorizableExistsException, RepositoryException {
-        User user = delegate.createSystemUser(userID, intermediatePath);
-        mount.createSystemUser(userID, user.getPath());
-        return user;
+        return delegate.createSystemUser(userID, intermediatePath);
     }
 
     public Group createGroup(String groupID) throws AuthorizableExistsException, RepositoryException {
-        Group group = delegate.createGroup(groupID);
-        mount.createGroup(groupID, group.getPrincipal(), group.getPath());
-        return group;
+        return delegate.createGroup(groupID);
     }
 
     public Group createGroup(Principal principal) throws AuthorizableExistsException, RepositoryException {
-        Group group = delegate.createGroup(principal);
-        mount.createGroup(group.getID(), principal, group.getPath());
-        return group;
+        return delegate.createGroup(principal);
     }
 
     public Group createGroup(Principal principal, String intermediatePath)
             throws AuthorizableExistsException, RepositoryException {
-        Group group = delegate.createGroup(principal, intermediatePath);
-        mount.createGroup(principal, group.getPath());
-        return group;
+        return delegate.createGroup(principal, intermediatePath);
     }
 
     public Group createGroup(String groupID, Principal principal, String intermediatePath)
             throws AuthorizableExistsException, RepositoryException {
-        Group group = delegate.createGroup(groupID, principal, intermediatePath);
-        mount.createGroup(groupID, principal, group.getPath());
-        return group;
+        return delegate.createGroup(groupID, principal, intermediatePath);
     }
 
     public boolean isAutoSave() {
