@@ -37,8 +37,10 @@ public class ProxyNamespaceRegistry implements NamespaceRegistry {
     public void registerNamespace(String prefix, String uri)
             throws NamespaceException, UnsupportedRepositoryOperationException, AccessDeniedException,
                     RepositoryException {
+        // delegate-ONLY (see class note): the mount shares the same session, so replaying on `mount`
+        // re-registers the SAME namespace and can throw NamespaceException — breaking content-package
+        // installs / content import that register namespaces. The `jcr` call already registers it globally.
         jcr.registerNamespace(prefix, uri);
-        mount.registerNamespace(prefix, uri);
     }
 
     @Override
@@ -46,7 +48,6 @@ public class ProxyNamespaceRegistry implements NamespaceRegistry {
             throws NamespaceException, UnsupportedRepositoryOperationException, AccessDeniedException,
                     RepositoryException {
         jcr.unregisterNamespace(prefix);
-        mount.unregisterNamespace(prefix);
     }
 
     @Override

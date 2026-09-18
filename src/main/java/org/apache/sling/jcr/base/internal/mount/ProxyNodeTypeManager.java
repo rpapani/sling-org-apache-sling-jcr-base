@@ -89,11 +89,18 @@ public class ProxyNodeTypeManager implements NodeTypeManager {
         return nodeTypeManager.createPropertyDefinitionTemplate();
     }
 
+    // NOTE (ASO cloneless-preview): register/unregister are delegate-ONLY (nodeTypeManager1 = the mount's
+    // manager is intentionally NOT called). Sling's generic proxy assumes the mount is a SEPARATE repository
+    // backend and replays the registration on both. Our PreviewRepositoryMount's OverlaySession shares the
+    // SAME underlying JCR session as the delegate, so replaying registers the SAME node type a second time on
+    // the SAME session -> NodeTypeExistsException (for allowUpdate=false) -> content-package installs and the
+    // Create Site wizard (which register node types during content import) fail. Node types are global and
+    // already registered by the delegate call; there is no separate mount store to sync. Same shared-session
+    // rationale as ProxyUserManager.create* and ProxyNamespaceRegistry.
     @Override
     public NodeType registerNodeType(NodeTypeDefinition ntd, boolean allowUpdate)
             throws InvalidNodeTypeDefinitionException, NodeTypeExistsException, UnsupportedRepositoryOperationException,
                     RepositoryException {
-        nodeTypeManager1.registerNodeType(ntd, allowUpdate);
         return nodeTypeManager.registerNodeType(ntd, allowUpdate);
     }
 
@@ -101,7 +108,6 @@ public class ProxyNodeTypeManager implements NodeTypeManager {
     public NodeTypeIterator registerNodeTypes(NodeTypeDefinition[] ntds, boolean allowUpdate)
             throws InvalidNodeTypeDefinitionException, NodeTypeExistsException, UnsupportedRepositoryOperationException,
                     RepositoryException {
-        nodeTypeManager1.registerNodeTypes(ntds, allowUpdate);
         return nodeTypeManager.registerNodeTypes(ntds, allowUpdate);
     }
 
@@ -109,13 +115,11 @@ public class ProxyNodeTypeManager implements NodeTypeManager {
     public void unregisterNodeType(String name)
             throws UnsupportedRepositoryOperationException, NoSuchNodeTypeException, RepositoryException {
         nodeTypeManager.unregisterNodeType(name);
-        nodeTypeManager1.unregisterNodeType(name);
     }
 
     @Override
     public void unregisterNodeTypes(String[] names)
             throws UnsupportedRepositoryOperationException, NoSuchNodeTypeException, RepositoryException {
         nodeTypeManager.unregisterNodeTypes(names);
-        nodeTypeManager1.unregisterNodeTypes(names);
     }
 }
