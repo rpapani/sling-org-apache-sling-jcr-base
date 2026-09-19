@@ -62,7 +62,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.jackrabbit.api.JackrabbitNode;
 import org.apache.jackrabbit.api.security.JackrabbitAccessControlManager;
 import org.apache.jackrabbit.commons.iterator.NodeIteratorAdapter;
 import org.apache.jackrabbit.oak.commons.PathUtils;
@@ -100,38 +99,6 @@ public class ProxySession<T extends Session> implements Session {
     public <F> F wrap(F source) {
         if (source instanceof ProxyWrapper) {
             return source;
-        }
-        // A REAL repository node is returned UNWRAPPED so it keeps its real repository type. Oak's
-        // node impl implements org.apache.jackrabbit.api.JackrabbitNode; the mount's own overlay nodes
-        // implement only javax.jcr.Node and are NEVER JackrabbitNode, and they are returned by the
-        // mount session ONLY while an overlay is active on the thread. So this instanceof both:
-        //  (a) makes the mount FULLY TRANSPARENT when no overlay is active — the mount session then
-        //      passes through real nodes, which stay real JackrabbitNodes, so AEM's pervasive
-        //      (JackrabbitNode) casts (create-site wizard, wcmmode=disabled render, workflows, MSM, …)
-        //      succeed exactly as they would without any mount registered; and
-        //  (b) leaves the active-overlay path unchanged — an OverlayNode/SyntheticNode is not a
-        //      JackrabbitNode, so it still gets wrapped below (so getSession()/navigation route back
-        //      through the ProxySession).
-        // Without this, EVERY /content node was a bare ProxyNode even with no overlay in effect, and
-        // any (JackrabbitNode) cast threw "ProxyNode cannot be cast to JackrabbitNode".
-        if (source instanceof JackrabbitNode) {
-            return source;
-        }
-        // Only proxy items within a mount subtree, or on the ancestor path leading to one (so child
-        // navigation can still route into the mount). Items in unrelated subtrees (e.g. /var, /conf,
-        // /home, /apps, /libs) are returned UNWRAPPED so they keep their real repository type. This is
-        // required because the generic Proxy* wrappers implement only the javax.jcr.* interfaces, not
-        // org.apache.jackrabbit.api.* (JackrabbitNode/JackrabbitSession-consuming code, e.g. AEM's
-        // workflow model reader, casts nodes to JackrabbitNode and fails on a bare ProxyNode).
-        if (source instanceof Item) {
-            try {
-                final String path = ((Item) source).getPath();
-                if (!isMount(path) && !isMountParent(path)) {
-                    return source;
-                }
-            } catch (RepositoryException ignore) {
-                // fall through and wrap defensively
-            }
         }
         return (F)
                 (source instanceof Node

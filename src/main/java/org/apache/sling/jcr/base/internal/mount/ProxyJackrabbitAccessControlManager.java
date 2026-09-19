@@ -27,6 +27,9 @@ import javax.jcr.security.AccessControlPolicy;
 import javax.jcr.security.Privilege;
 
 import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.jackrabbit.api.security.JackrabbitAccessControlManager;
@@ -41,27 +44,31 @@ public class ProxyJackrabbitAccessControlManager extends ProxyAccessControlManag
         super(mountSession, delegate, mount);
     }
 
-    // NOTE (ASO cloneless-preview): the principal-based reads below are delegate-ONLY. The mount shares the
-    // same underlying session, so `mount` is the SAME access-control store as `delegate`; combining both
-    // returned every policy TWICE (duplicate ACEs to any caller enumerating principal policies). Path-based
-    // methods (hasPrivileges/getPrivileges below, and setPolicy/removePolicy in the superclass) stay
-    // path-routed. Same shared-session rationale as ProxyUserManager / ProxyNodeTypeManager.
     public JackrabbitAccessControlPolicy[] getApplicablePolicies(Principal principal)
             throws AccessDeniedException, AccessControlException, UnsupportedRepositoryOperationException,
                     RepositoryException {
-        return delegate.getApplicablePolicies(principal);
+        List<JackrabbitAccessControlPolicy> result = new ArrayList<>();
+        result.addAll(Arrays.asList(delegate.getApplicablePolicies(principal)));
+        result.addAll(Arrays.asList(mount.getApplicablePolicies(principal)));
+        return result.toArray(new JackrabbitAccessControlPolicy[0]);
     }
 
     public JackrabbitAccessControlPolicy[] getPolicies(Principal principal)
             throws AccessDeniedException, AccessControlException, UnsupportedRepositoryOperationException,
                     RepositoryException {
-        return delegate.getPolicies(principal);
+        List<JackrabbitAccessControlPolicy> result = new ArrayList<>();
+        result.addAll(Arrays.asList(delegate.getPolicies(principal)));
+        result.addAll(Arrays.asList(mount.getPolicies(principal)));
+        return result.toArray(new JackrabbitAccessControlPolicy[0]);
     }
 
     public AccessControlPolicy[] getEffectivePolicies(Set<Principal> principals)
             throws AccessDeniedException, AccessControlException, UnsupportedRepositoryOperationException,
                     RepositoryException {
-        return delegate.getEffectivePolicies(principals);
+        List<AccessControlPolicy> result = new ArrayList<>();
+        result.addAll(Arrays.asList(delegate.getEffectivePolicies(principals)));
+        result.addAll(Arrays.asList(mount.getEffectivePolicies(principals)));
+        return result.toArray(new AccessControlPolicy[0]);
     }
 
     public boolean hasPrivileges(String absPath, Set<Principal> principals, Privilege[] privileges)

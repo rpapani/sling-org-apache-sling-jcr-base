@@ -51,7 +51,9 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.Calendar;
 
-public class ProxyNode extends ProxyItem<Node> implements Node {
+import org.apache.jackrabbit.api.JackrabbitNode;
+
+public class ProxyNode extends ProxyItem<Node> implements Node, JackrabbitNode {
     public ProxyNode(ProxySession mountSession, Node node) {
         super(mountSession, node);
     }
@@ -484,5 +486,38 @@ public class ProxyNode extends ProxyItem<Node> implements Node {
     public String[] getAllowedLifecycleTransistions()
             throws UnsupportedRepositoryOperationException, RepositoryException {
         return this.delegate.getAllowedLifecycleTransistions();
+    }
+
+    // --- org.apache.jackrabbit.api.JackrabbitNode ---------------------------------------------------------
+    // The mounted repository is Jackrabbit/Oak-backed, and AEM casts nodes to JackrabbitNode pervasively
+    // (WorkflowSession model reader, MSM SourceTargetFilter, Create-Site/Create-Page wizards, the author
+    // editor). A bare ProxyNode that implemented only javax.jcr.Node therefore threw
+    // "ProxyNode cannot be cast to JackrabbitNode" on those paths — including while an overlay is active
+    // (e.g. rendering a page whose navigation resolves live-copy relationships). Implementing JackrabbitNode
+    // preserves that contract for a Jackrabbit-backed mount. Only rename()/setMixins() are abstract in the
+    // JackrabbitNode API compiled here (2.13.4); the newer runtime interface's other methods
+    // (getNodeOrNull/getPropertyOrNull/getParentOrNull/getEstimatedDescendantNodeCount) are default methods
+    // that operate on `this`, so they route through the proxy/mount automatically. rename()/setMixins() are
+    // write ops delegated to the underlying node when it is itself a JackrabbitNode.
+    @Override
+    public void rename(String newName) throws RepositoryException {
+        if (this.delegate instanceof JackrabbitNode) {
+            ((JackrabbitNode) this.delegate).rename(newName);
+        } else {
+            throw new UnsupportedRepositoryOperationException(
+                    "rename is not supported on a non-Jackrabbit mounted node");
+        }
+    }
+
+    @Override
+    public void setMixins(String[] mixinNames)
+            throws NoSuchNodeTypeException, VersionException, ConstraintViolationException, LockException,
+                    RepositoryException {
+        if (this.delegate instanceof JackrabbitNode) {
+            ((JackrabbitNode) this.delegate).setMixins(mixinNames);
+        } else {
+            throw new UnsupportedRepositoryOperationException(
+                    "setMixins is not supported on a non-Jackrabbit mounted node");
+        }
     }
 }

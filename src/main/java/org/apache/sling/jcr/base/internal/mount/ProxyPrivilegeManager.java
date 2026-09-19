@@ -24,6 +24,10 @@ import javax.jcr.RepositoryException;
 import javax.jcr.security.AccessControlException;
 import javax.jcr.security.Privilege;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import org.apache.jackrabbit.api.security.authorization.PrivilegeManager;
 
 public class ProxyPrivilegeManager extends ProxyWrapper<PrivilegeManager> implements PrivilegeManager {
@@ -34,22 +38,26 @@ public class ProxyPrivilegeManager extends ProxyWrapper<PrivilegeManager> implem
         this.mount = mount;
     }
 
-    // NOTE (ASO cloneless-preview): all methods are delegate-ONLY (the `mount` PrivilegeManager is not
-    // called). The mount shares the same underlying session, so it is the SAME privilege registry as
-    // `delegate`: combining both in getRegisteredPrivileges returned every privilege TWICE, and replaying
-    // registerPrivilege re-registered the SAME privilege on the SAME session -> "privilege already exists"
-    // -> content-package installs / custom privilege registration fail. Same shared-session rationale as
-    // ProxyUserManager / ProxyNodeTypeManager / ProxyNamespaceRegistry.
     public Privilege[] getRegisteredPrivileges() throws RepositoryException {
-        return delegate.getRegisteredPrivileges();
+        List<Privilege> result = new ArrayList<>();
+        result.addAll(Arrays.asList(delegate.getRegisteredPrivileges()));
+
+        result.addAll(Arrays.asList(mount.getRegisteredPrivileges()));
+
+        return result.toArray(new Privilege[0]);
     }
 
     public Privilege getPrivilege(String privilegeName) throws AccessControlException, RepositoryException {
-        return delegate.getPrivilege(privilegeName);
+        try {
+            return mount.getPrivilege(privilegeName);
+        } catch (AccessControlException ex) {
+            return delegate.getPrivilege(privilegeName);
+        }
     }
 
     public Privilege registerPrivilege(String privilegeName, boolean isAbstract, String[] declaredAggregateNames)
             throws AccessDeniedException, NamespaceException, RepositoryException {
+        mount.registerPrivilege(privilegeName, isAbstract, declaredAggregateNames);
         return delegate.registerPrivilege(privilegeName, isAbstract, declaredAggregateNames);
     }
 }
