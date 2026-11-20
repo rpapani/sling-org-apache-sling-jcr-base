@@ -82,9 +82,26 @@ public class ProxySession<T extends Session> implements Session {
     }
 
     boolean isMount(String path) {
-        return path != null
-                && (mountPoints.contains(path)
-                        || mountPoints.stream().anyMatch(mountPoint -> path.startsWith(mountPoint + "/")));
+        if (path == null) {
+            return false;
+        }
+        // called for every proxied lookup: a plain loop, no stream or string concatenation
+        for (String mountPoint : mountPoints) {
+            if (path.startsWith(mountPoint)
+                    && (path.length() == mountPoint.length() || path.charAt(mountPoint.length()) == '/')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether {@code item} was served by the mount. Items carry the session they were read through; anything not
+     * read through the mount session comes from the repository (whose session may be wrapped by the platform,
+     * so it is not compared by identity).
+     */
+    boolean isFromMount(Item item) throws RepositoryException {
+        return item.getSession() == this.mount;
     }
 
     boolean isMountParent(String path) {

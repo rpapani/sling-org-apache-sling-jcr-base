@@ -62,7 +62,12 @@ public class ProxyItem<T extends Item> extends ProxyWrapper<T> implements Item {
         String parentPath;
 
         try {
-            parentPath = this.delegate.getParent().getPath();
+            Node parent = this.delegate.getParent();
+            parentPath = parent.getPath();
+            // The parent is served by the same side as this item: use it as is rather than look it up again.
+            if (this.mountSession.isFromMount(this.delegate) == this.mountSession.isMount(parentPath)) {
+                return this.mountSession.wrap(parent);
+            }
         } catch (Exception ex) {
             if (ex instanceof AccessDeniedException) {
                 throw (AccessDeniedException) ex;

@@ -193,6 +193,9 @@ public class ProxyNode extends ProxyItem<Node> implements Node, JackrabbitNode {
 
     @Override
     public Node getNode(String relPath) throws PathNotFoundException, RepositoryException {
+        if (resolvesLocally(relPath)) {
+            return this.mountSession.wrap(this.delegate.getNode(relPath));
+        }
         return this.mountSession.getNode(concat(getPath(), relPath));
     }
 
@@ -273,12 +276,89 @@ public class ProxyNode extends ProxyItem<Node> implements Node, JackrabbitNode {
 
     @Override
     public boolean hasNode(String relPath) throws RepositoryException {
+        if (resolvesLocally(relPath)) {
+            return this.delegate.hasNode(relPath);
+        }
         return this.mountSession.nodeExists(concat(getPath(), relPath));
     }
 
     @Override
     public boolean hasProperty(String relPath) throws RepositoryException {
+        if (resolvesLocally(relPath)) {
+            return this.delegate.hasProperty(relPath);
+        }
         return this.mountSession.propertyExists(concat(getPath(), relPath));
+    }
+
+    /**
+     * Whether {@code relPath} can be resolved against the wrapped node itself rather than through an absolute
+     * path lookup from the root: it must be a plain descendant path, and its target must be served by the same
+     * side (mount or repository) that served this node, which is exactly where the absolute lookup would go.
+     * A relative lookup lets the underlying repository resolve one step from a node it already holds; the
+     * absolute lookup re-resolves every segment from the root on each call.
+     */
+    private boolean resolvesLocally(String relPath) throws RepositoryException {
+        if (!isPlainDescendantPath(relPath)) {
+            return false;
+        }
+        if (this.mountSession.isFromMount(this.delegate)) {
+            // descendants of a node inside a mount point are inside it too
+            return this.mountSession.isMount(getPath());
+        }
+        // a repository node; the repository serves the target unless it lies in a mount point
+        return !this.mountSession.isMount(concat(getPath(), relPath));
+    }
+
+    /**
+     * Single lookup for {@code JackrabbitNode.getNodeOrNull} (a default method of newer Jackrabbit APIs that
+     * would otherwise call {@link #hasNode} and then {@link #getNode}).
+     */
+    public JackrabbitNode getNodeOrNull(String relPath) throws RepositoryException {
+        if (resolvesLocally(relPath)) {
+            Object node = JackrabbitMethods.onNode(JackrabbitMethods.NODE_GET_NODE_OR_NULL, this.delegate, relPath);
+            if (node != JackrabbitMethods.UNAVAILABLE) {
+                return node == null ? null : (JackrabbitNode) this.mountSession.wrap((Node) node);
+            }
+        }
+        return hasNode(relPath) ? (JackrabbitNode) getNode(relPath) : null;
+    }
+
+    /**
+     * Single lookup for {@code JackrabbitNode.getPropertyOrNull}, see {@link #getNodeOrNull(String)}.
+     */
+    public Property getPropertyOrNull(String relPath) throws RepositoryException {
+        if (resolvesLocally(relPath)) {
+            Object property =
+                    JackrabbitMethods.onNode(JackrabbitMethods.NODE_GET_PROPERTY_OR_NULL, this.delegate, relPath);
+            if (property != JackrabbitMethods.UNAVAILABLE) {
+                return property == null ? null : this.mountSession.wrap((Property) property);
+            }
+        }
+        return hasProperty(relPath) ? getProperty(relPath) : null;
+    }
+
+    private static boolean isPlainDescendantPath(String relPath) {
+        if (relPath == null || relPath.isEmpty() || relPath.charAt(0) == '/') {
+            return false;
+        }
+        if (relPath.indexOf('[') >= 0 || relPath.indexOf('{') >= 0) {
+            return false;
+        }
+        int start = 0;
+        while (start <= relPath.length()) {
+            int end = relPath.indexOf('/', start);
+            if (end < 0) {
+                end = relPath.length();
+            }
+            int len = end - start;
+            if (len == 0
+                    || (len == 1 && relPath.charAt(start) == '.')
+                    || (len == 2 && relPath.charAt(start) == '.' && relPath.charAt(start + 1) == '.')) {
+                return false;
+            }
+            start = end + 1;
+        }
+        return true;
     }
 
     @Override

@@ -64,26 +64,32 @@ public class ProxyJackrabbitSession extends ProxySession<JackrabbitSession> impl
     }
 
     public Item getItemOrNull(String absPath) throws RepositoryException {
-        if (super.itemExists(absPath)) {
-            return super.getItem(absPath);
-        } else {
-            return null;
+        Object item = JackrabbitMethods.onSession(JackrabbitMethods.SESSION_GET_ITEM_OR_NULL, side(absPath), absPath);
+        if (item != JackrabbitMethods.UNAVAILABLE) {
+            return item == null ? null : wrap((Item) item);
         }
+        return super.itemExists(absPath) ? super.getItem(absPath) : null;
     }
 
     public Property getPropertyOrNull(String absPath) throws RepositoryException {
-        if (super.propertyExists(absPath)) {
-            return super.getProperty(absPath);
-        } else {
-            return null;
+        Object property =
+                JackrabbitMethods.onSession(JackrabbitMethods.SESSION_GET_PROPERTY_OR_NULL, side(absPath), absPath);
+        if (property != JackrabbitMethods.UNAVAILABLE) {
+            return property == null ? null : wrap((Property) property);
         }
+        return super.propertyExists(absPath) ? super.getProperty(absPath) : null;
     }
 
     public Node getNodeOrNull(String absPath) throws RepositoryException {
-        if (super.nodeExists(absPath)) {
-            return super.getNode(absPath);
-        } else {
-            return null;
+        Object node = JackrabbitMethods.onSession(JackrabbitMethods.SESSION_GET_NODE_OR_NULL, side(absPath), absPath);
+        if (node != JackrabbitMethods.UNAVAILABLE) {
+            return node == null ? null : wrap((Node) node);
         }
+        return super.nodeExists(absPath) ? super.getNode(absPath) : null;
+    }
+
+    /** The session that serves {@code absPath}: the mount inside a mount point, else the repository. */
+    private Session side(String absPath) {
+        return isMount(absPath) ? this.mount : this.jcr;
     }
 }
