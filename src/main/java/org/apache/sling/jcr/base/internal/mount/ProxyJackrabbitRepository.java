@@ -30,6 +30,7 @@ import java.util.Set;
 
 import org.apache.jackrabbit.api.JackrabbitRepository;
 import org.apache.jackrabbit.api.JackrabbitSession;
+import org.apache.sling.jcr.base.spi.RepositoryMount;
 
 public class ProxyJackrabbitRepository extends ProxyRepository<JackrabbitRepository> implements JackrabbitRepository {
     public ProxyJackrabbitRepository(JackrabbitRepository jcr, JackrabbitRepository mount, Set<String> mountPoint) {
@@ -40,11 +41,16 @@ public class ProxyJackrabbitRepository extends ProxyRepository<JackrabbitReposit
     public Session login(Credentials credentials, String workspaceName, Map<String, Object> attributes)
             throws LoginException, NoSuchWorkspaceException, RepositoryException {
         Session jcrSession = jcr.login(credentials, workspaceName, attributes);
+        if (!appliesTo(jcrSession)) {
+            return jcrSession;
+        }
 
         if (attributes == null) {
             attributes = new HashMap<>();
         }
         attributes.put(ProxyRepository.class.getPackage().getName() + ".PARENT_SESSION", jcrSession);
+        // the key the RepositoryMount API documents for the parent session
+        attributes.put(RepositoryMount.PARENT_SESSION_KEY, jcrSession);
 
         Session mountSession = mount.login(credentials, workspaceName, attributes);
 

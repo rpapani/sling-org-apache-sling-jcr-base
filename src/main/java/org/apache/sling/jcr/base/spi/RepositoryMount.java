@@ -18,6 +18,8 @@
  */
 package org.apache.sling.jcr.base.spi;
 
+import javax.jcr.Session;
+
 import org.apache.jackrabbit.api.JackrabbitRepository;
 
 /**
@@ -34,6 +36,9 @@ import org.apache.jackrabbit.api.JackrabbitRepository;
  * JackrabbitRepository#login(javax.jcr.Credentials, String, java.util.Map)} in order to login
  * against the custom data provider. It will get access to the JCR session through {@link
  * #PARENT_SESSION_KEY}.
+ *
+ * <p>A mount may restrict itself to some sessions only, see {@link #appliesTo(Session)}. Sessions it
+ * does not apply to are handed out unwrapped and do not pay for the proxy layer.
  */
 public interface RepositoryMount extends JackrabbitRepository {
     /**
@@ -48,4 +53,24 @@ public interface RepositoryMount extends JackrabbitRepository {
      * mounter can mount itself at various points in the JCR repository.
      */
     String MOUNT_POINTS_KEY = "org.apache.sling.jcr.base.RepositoryMount.MOUNT_POINTS";
+
+    /**
+     * Decides whether a session created by the repository is combined with this mount. It is called once for
+     * every login, and for every service session, while this mount is registered, with the session the
+     * repository has just created.
+     *
+     * <p>Returning {@code false} hands out that session unchanged: it does not see the mount and does not
+     * go through the proxy layer for its whole lifetime. Sessions derived from a session that is combined
+     * with the mount (for example by {@link Session#impersonate(javax.jcr.Credentials)}) stay combined.
+     *
+     * <p>Implementations must be fast and must not throw; a {@code RuntimeException} is treated as
+     * {@code false}. The default applies the mount to every session.
+     *
+     * @param session the session just created by the underlying repository
+     * @return {@code true} to combine the session with this mount
+     * @since 0.2.0
+     */
+    default boolean appliesTo(Session session) {
+        return true;
+    }
 }

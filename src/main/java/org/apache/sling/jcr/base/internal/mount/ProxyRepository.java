@@ -35,8 +35,12 @@ import java.util.Set;
 import org.apache.jackrabbit.api.JackrabbitRepository;
 import org.apache.jackrabbit.api.JackrabbitSession;
 import org.apache.sling.jcr.base.spi.RepositoryMount;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProxyRepository<T extends Repository> implements Repository {
+    private static final Logger LOG = LoggerFactory.getLogger(ProxyRepository.class);
+
     public final T jcr;
     final T mount;
     final Set<String> mountPoints;
@@ -81,6 +85,9 @@ public class ProxyRepository<T extends Repository> implements Repository {
     public Session login(Credentials credentials, String workspaceName)
             throws LoginException, NoSuchWorkspaceException, RepositoryException {
         Session jcrSession = jcr.login(credentials, workspaceName);
+        if (!appliesTo(jcrSession)) {
+            return jcrSession;
+        }
 
         Session mountSession;
         if (mount instanceof JackrabbitRepository) {
@@ -111,7 +118,7 @@ public class ProxyRepository<T extends Repository> implements Repository {
     }
 
     public Session wrap(Session session) throws RepositoryException {
-        if (session instanceof ProxySession) {
+        if (session instanceof ProxySession || !appliesTo(session)) {
             return session;
         }
 
@@ -126,6 +133,22 @@ public class ProxyRepository<T extends Repository> implements Repository {
         return session instanceof JackrabbitSession
                 ? new ProxyJackrabbitSession(this, (JackrabbitSession) session, mountSession, this.mountPoints)
                 : new ProxySession<>(this, session, mountSession, this.mountPoints);
+    }
+
+    /**
+     * Whether the mount wants {@code session}, a session just created by the underlying repository. A mount
+     * that is not a {@link RepositoryMount}, or does not say otherwise, applies to every session.
+     */
+    boolean appliesTo(Session session) {
+        if (!(mount instanceof RepositoryMount)) {
+            return true;
+        }
+        try {
+            return ((RepositoryMount) mount).appliesTo(session);
+        } catch (RuntimeException e) {
+            LOG.warn("RepositoryMount.appliesTo failed; handing out the session without the mount", e);
+            return false;
+        }
     }
 
     Session impersonate(Credentials credentials, Session jcr, Session mount) throws RepositoryException {
